@@ -49,7 +49,7 @@ unless FileTest.exist? 'data/server.key'
 end
 
 
-# load keys (these keys are just used locally, which can be easily audited)
+# load keys (private keys are just used locally, which can be easily audited)
 $acc_priv = OpenSSL::PKey::RSA.new File.read('data/acc.key')
 $acc_pub = $acc_priv.public_key
 
