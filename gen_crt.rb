@@ -258,9 +258,10 @@ end
 # Write cert
 def cert_out(res, uri)
   print "Cert saved to output.pem & could download from:\n#{uri}"
-  cert = OpenSSL::X509::Certificate.new res.body
-  File.open("data/output.pem", "w") {|f| f.write cert.to_pem}
+  cert = OpenSSL::X509::Certificate.new(res.body).to_pem
+  File.open("data/output.pem", "w") {|f| f.write cert}
   File.open("data/ca-bundle.pem", "w") {|f| f.write ca_bundle}
+  File.open("data/full-chain.pem", "w") {|f| f.write cert + ca_bundle}
 end
 
 
