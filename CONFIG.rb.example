@@ -4,3 +4,6 @@ TERMS = "https://letsencrypt.org/documents/LE-SA-v1.0.1-July-27-2015.pdf"
 
 MAIL = "admin@letsencrypt.example"
 CN = "server.letsencrypt.example"
+
+# suffix with ~ =? include subdomains
+EXCLUDE_DOMAIN = ["~twbbs.org"]

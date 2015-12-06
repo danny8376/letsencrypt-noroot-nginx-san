@@ -29,7 +29,15 @@ def get_domains
       end
     end
   end
-  domains.uniq
+  domains.uniq.reject do |domain|
+    EXCLUDE_DOMAIN.any? do |exclude|
+      if exclude.start_with? "~"
+        domain.end_with? exclude[1..-1]
+      else
+        domain == exclude
+      end
+    end
+  end
 end
 
 $domains = get_domains
