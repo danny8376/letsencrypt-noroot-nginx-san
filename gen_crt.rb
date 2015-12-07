@@ -11,12 +11,35 @@ SUPPORT_CHALLENGES = ["http-01"]
 SERVER_SOCKFILE = '/tmp/acme-challenge.sock'
 
 
-# simple nginx config grep
+
+ngx_options = `nginx -V 2>&1`
+NGINX_CONF = ngx_options.scan(/--conf-path=([^\s]+)/).last[0]
+NGINX_CONF_PREFIX = NGINX_CONF[/^\/?([^\/]+\/)+/]
+# get all used nginx confs
+def get_nginx_confs(conf = NGINX_CONF)
+  conf = "#{NGINX_CONF_PREFIX}#{conf}" unless conf[0] == "/"
+  if conf.include? "*"
+    begin
+      Dir[conf].collect{|c| get_nginx_confs c}.flatten
+    rescue Errno::EACCES
+      print "#{conf} permission denied\n"
+      []
+    end
+  else
+    begin
+      ([conf] +
+      File.read(conf).scan(/[^#]\s*include\s+([^;]+);/).flatten.collect{|c| get_nginx_confs c}.flatten).uniq
+    rescue Errno::EACCES
+      print "#{conf} permission denied\n"
+      []
+    end
+  end
+end
+# list domains from nginx confs
 def get_domains
-  nginx_confs = Dir["/etc/nginx/**/*.*"]
   domains = []
   pending = []
-  nginx_confs.each do |conf|
+  get_nginx_confs.each do |conf|
     next unless File.file? conf
     File.open(conf, 'r') do |file|
       file.each_line do |line|
