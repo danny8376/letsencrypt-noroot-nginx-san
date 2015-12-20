@@ -35,6 +35,7 @@ def get_nginx_confs(conf = NGINX_CONF)
     end
   end
 end
+STATIC_DOMAIN_PATTERN = /^[a-zA-Z0-9.-]+$/
 # list domains from nginx confs
 def get_domains
   domains = []
@@ -52,7 +53,8 @@ def get_domains
       end
     end
   end
-  domains.uniq.reject do |domain|
+  domains.uniq!
+  domains.reject! do |domain|
     EXCLUDE_DOMAIN.any? do |exclude|
       if exclude.start_with? "~"
         domain.end_with? exclude[1..-1]
@@ -61,6 +63,15 @@ def get_domains
       end
     end
   end
+  static, wildcard = [], []
+  domains.each{|d| (d[STATIC_DOMAIN_PATTERN] ? static : wildcard).push d}
+  WILDCARD_PROCESSING.call(wildcard, static) unless wildcard.empty?
+  wildcard.flatten!
+  wildcard.select!{|d| String === d}
+  wildcard_check = []
+  wildcard.each{|d| wildcard_check.push d unless d[STATIC_DOMAIN_PATTERN]}
+  raise "Wildcard domains not precceed:#{wildcard_check.join " "}" unless wildcard_check.empty?
+  static + wildcard
 end
 
 $domains = get_domains

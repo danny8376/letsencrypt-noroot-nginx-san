@@ -7,3 +7,10 @@ CN = "server.letsencrypt.example"
 
 # suffix with ~ =? include subdomains
 EXCLUDE_DOMAIN = ["~twbbs.org"]
+
+# proc for processing
+# wildcard => array with wildcard domains to process
+#          =>  !!! This is the array to modify !!!
+# static => array with static domains for reference
+WILDCARD_PROCESSING = Proc.new do |wildcard, static|
+end
