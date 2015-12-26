@@ -44,9 +44,9 @@ def get_domains
     File.open(conf, 'r') do |file|
       file.each_line do |line|
         case line
-        when /^\s*server_name/
+        when /[^#]\s*server_name/
           pending = line.split(/[\s;]/).reject{|c| c.empty? or not c.include? "."}
-        when /include includes\/acme-challenge.conf;/
+        when /[^#]\s*include includes\/acme-challenge.conf;/
           domains += pending
         end
       end
