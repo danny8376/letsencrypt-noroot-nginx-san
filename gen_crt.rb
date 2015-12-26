@@ -37,7 +37,7 @@ end
 STATIC_DOMAIN_PATTERN = /^[a-zA-Z0-9.-]+$/
 # list domains from nginx confs
 def get_domains
-  domains = []
+  domains = [CN]
   pending = []
   get_nginx_confs.each do |conf|
     next unless File.file? conf
