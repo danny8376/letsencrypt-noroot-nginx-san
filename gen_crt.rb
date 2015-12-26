@@ -8,7 +8,6 @@ load 'CONFIG.rb'
 
 
 SUPPORT_CHALLENGES = ["http-01"]
-SERVER_SOCKFILE = '/tmp/acme-challenge.sock'
 
 
 
@@ -168,12 +167,12 @@ end
 print "Starting domain auth\n"
 
 # The unix socket server for nginx to pass, which used for auth domain
-$auth_server = UNIXServer.new(SERVER_SOCKFILE)
-File.chmod(0777, SERVER_SOCKFILE)
+$auth_server = UNIXServer.new(ACME_SOCK)
+File.chmod(0777, ACME_SOCK)
 
 at_exit do
   $auth_server.close if $auth_server and not $auth_server.closed?
-  FileUtils.rm SERVER_SOCKFILE
+  FileUtils.rm ACME_SOCK
 end
 
 # The whole auth process as follow
