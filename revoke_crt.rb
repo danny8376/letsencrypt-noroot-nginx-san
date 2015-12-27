@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby
 require 'json/jwt'
 require 'net/http'
+require 'open-uri'
 
 # load config
 load 'CONFIG.rb'
@@ -11,7 +12,7 @@ $priv = OpenSSL::PKey::RSA.new File.read(Dir['data/acc.key', 'data/domain.key'].
 $pub = $priv.public_key
 $jwk = JSON::JWK.new $pub
 
-$cert = OpenSSL::X509::Certificate.new File.read(ARGV[0] ? ARGV[0] : 'data/output.pem')
+$cert = OpenSSL::X509::Certificate.new open(ARGV[0] ? ARGV[0] : 'data/output.pem'){|f| f.read}
 
 def ca_request(path, method = :get, data = nil)
   uri = URI(CA)
