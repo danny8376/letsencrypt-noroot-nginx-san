@@ -1,6 +1,5 @@
 #!/usr/bin/env ruby
-require 'json/jwt'
-require 'net/http'
+require_relative 'lib/common'
 
 # load config
 load 'CONFIG.rb'
@@ -100,26 +99,9 @@ $acc_thumbprint = $acc_jwk.thumbprint # thumbprint for domain challenge
 $server_priv = OpenSSL::PKey::RSA.new File.read('data/server.key') # key for ssl server; used for sign csr
 $server_pub = $server_priv.public_key
 
-# method to send request to acme server
-def ca_request(path, method = :get, data = nil)
-  uri = URI(CA)
-  data = data.to_s if JSON::JWS === data
-  Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == 'https') do |http|
-    http.send method, path, data
-    # get, head, ... has no data, but has initheader.
-    # Thus, it won't be any exception here ;P
-  end
-end
-
-# method to gen jws
 def jws(hash)
-  jws = JSON::JWS.new hash
-  jws.alg = :RS256
-  jws.jwk = $acc_jwk
-  jws.header[:nonce] = ca_request('/directory')['Replay-Nonce'] # token for preventing replay attack
-  jws.sign!($acc_priv)
+  jws_raw(hash, $acc_jwk, $acc_priv)
 end
-
 
 print "Generating CSR\n"
 
@@ -276,27 +258,6 @@ end
 
 
 print "Request for cert\n"
-
-def ca_bundle
-  chain = []
-  chain << Net::HTTP.get(URI("https://letsencrypt.org/certs/lets-encrypt-x3-cross-signed.pem"))
-
-  web = Net::HTTP.get(URI("https://www.identrust.com/certificates/trustid/root-download-x3.html"))
-  str = /<textarea[^>]*>([^<]+)<\/textarea>/.match(web)[1].gsub(/(\r|[ \t]*$)/){}
-  chain << "-----BEGIN CERTIFICATE-----#{str}-----END CERTIFICATE-----\n"
-
-  chain.join
-end
-
-# Write cert
-def cert_out(res, uri)
-  print "Cert saved to output.pem & could download from:\n#{uri}"
-  cert = OpenSSL::X509::Certificate.new(res.body).to_pem
-  File.open("data/output.pem", "w") {|f| f.write cert}
-  File.open("data/ca-bundle.pem", "w") {|f| f.write ca_bundle}
-  File.open("data/full-chain.pem", "w") {|f| f.write cert + ca_bundle}
-  File.open("data/history.txt", "a") {|f| f.write "#{Time.now}:#{uri}\n"}
-end
 
 
 res = ca_request("/acme/new-cert", :post, jws({
