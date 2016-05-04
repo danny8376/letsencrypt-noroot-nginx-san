@@ -38,5 +38,5 @@ def cert_out(res, uri=nil, new_cert=true)
   File.open("data/output.pem", "w") {|f| f.write cert}
   File.open("data/ca-bundle.pem", "w") {|f| f.write ca_bundle}
   File.open("data/full-chain.pem", "w") {|f| f.write cert + ca_bundle}
-  File.open("data/history.txt", "a") {|f| f.write "#{Time.now}:#{uri}\n"} unless new_cert
+  File.open("data/history.txt", "a") {|f| f.write "#{Time.now}:#{uri}\n"} if new_cert
 end
