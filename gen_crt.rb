@@ -33,7 +33,7 @@ def get_nginx_confs(conf = NGINX_CONF)
     end
   end
 end
-STATIC_DOMAIN_PATTERN = /^[a-zA-Z0-9.-]+$/
+STATIC_DOMAIN_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9.-]+$/
 # list domains from nginx confs
 def get_domains
   domains = [CN]
