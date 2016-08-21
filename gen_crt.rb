@@ -197,7 +197,9 @@ end
 
 # Auth domain OwO
 def auth_domain(uri, auth)
-  ca_request(uri) # This status shuold be pending
+  res = ca_request(uri) # This status shuold be pending most time
+  res = JSON.parse(res.body)
+  return res if res['status'] == "valid"
 
   wait_auth(auth) # blocking here OwO
   sleep 1 # wait acme server for processing
