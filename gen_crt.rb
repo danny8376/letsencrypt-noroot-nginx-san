@@ -109,6 +109,7 @@ print "Generating CSR\n"
 # As default, email of cert will be that of your account
 # You can modify it if you don't like
 csr = OpenSSL::X509::Request.new
+csr.version = 1 # just make it not zero :P
 csr.subject = OpenSSL::X509::Name.new([
   ['CN',           CN,   OpenSSL::ASN1::UTF8STRING],
   ['emailAddress', MAIL, OpenSSL::ASN1::UTF8STRING]
