@@ -23,9 +23,10 @@ def ca_bundle
   chain = []
   chain << Net::HTTP.get(URI("https://letsencrypt.org/certs/lets-encrypt-x3-cross-signed.pem"))
 
-  web = Net::HTTP.get(URI("https://www.identrust.com/certificates/trustid/root-download-x3.html"))
-  str = /<textarea[^>]*>([^<]+)<\/textarea>/.match(web)[1].gsub(/(\r|[ \t]*$)/){}
-  chain << "-----BEGIN CERTIFICATE-----#{str}-----END CERTIFICATE-----\n"
+  #web = Net::HTTP.get(URI("https://www.identrust.com/certificates/trustid/root-download-x3.html"))
+  #str = /<textarea[^>]*>([^<]+)<\/textarea>/.match(web)[1].gsub(/(\r|[ \t]*$)/){}
+  #chain << "-----BEGIN CERTIFICATE-----#{str}-----END CERTIFICATE-----\n"
+  chain << File.read("lib/DST_Root_CA_X3.pem")
 
   chain.join
 end
