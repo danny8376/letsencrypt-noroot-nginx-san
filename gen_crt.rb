@@ -1,5 +1,6 @@
 #!/usr/bin/env ruby
 require_relative 'lib/common'
+require 'url_safe_base64'
 
 # load config
 load 'CONFIG.rb'
