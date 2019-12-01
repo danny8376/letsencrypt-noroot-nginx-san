@@ -1,5 +1,6 @@
 #!/usr/bin/env ruby
 # exit 0=> new cert, 1=> ruby err, 2=> no renewal, 5=> auth err, 10=> no key
+require 'socket'
 require 'acme-client'
 
 # load config
@@ -67,7 +68,7 @@ def get_domains
     if d[STATIC_DOMAIN_PATTERN]
       # nothing
     elsif d[WILDCARD_DOMAIN_PATTERN]
-      print "!!!NOTICE!!! wildcard SAN #{d}"
+      print "!!!NOTICE!!! wildcard SAN #{d}\n"
     else
       wildcard_check.push d
     end
@@ -133,7 +134,7 @@ end
 print "Start domain auth\n"
 
 $auth_server = UNIXServer.new(ACME_SOCK)
-$authes = {} # [auth, challenge]
+$authes = {} # [auth, challenge, delayed]
 File.chmod(0777, ACME_SOCK)
 at_exit do
   $auth_server.close if $auth_server and not $auth_server.closed?
@@ -165,14 +166,23 @@ $order = $acme.new_order(identifiers: $domains)
 
 $order.authorizations.each do |auth|
   print "Auth for domain #{auth.domain}\n"
-  if auth.domain[0] == "*" # wildcard
-  else
-    http01 = auth.http
+  dns01 = auth.dns
+  http01 = auth.http
+  if http01
     $authes["/#{http01.filename}"] = [auth, http01]
     http01.request_validation
     print "#{auth.domain} auth requested, expires: #{auth.expires}\n"
+  else
+    $authes["#{auth.domain}"] = [auth, dns01, true]
+    unless DNS_UPDATE.call(auth.domain, dns01.record_name, dns01.record_type, dns01.record_content)
+      print "Domain #{auth.domain} dns update failed\n"
+      exit 5
+    end
+    print "#{auth.domain} auth requested, expires: #{auth.expires}\n"
   end
 end
+
+$authes.each {|k, v| v[1].request_validation if v[2]}
 
 while $authes.any? {|k, v| v[1].status == 'pending'}
   sleep 5
