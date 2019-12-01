@@ -12,6 +12,9 @@ ACME_SOCK = "/tmp/acme-challenge.sock"
 # suffix with ~ =? include subdomains
 EXCLUDE_DOMAIN = ["~twbbs.org"]
 
+# list of custom additional domains
+CUSTOM_DOMAIN = []
+
 # proc for processing
 # wildcard => array with wildcard domains to process
 #          =>  !!! This is the array to modify !!!

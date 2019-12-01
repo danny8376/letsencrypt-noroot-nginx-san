@@ -74,7 +74,7 @@ def get_domains
     end
   }
   raise "Domains not precceed:#{wildcard_check.join " "}" unless wildcard_check.empty?
-  static + wildcard
+  static + wildcard + CUSTOM_DOMAIN
 end
 
 $domains = get_domains
