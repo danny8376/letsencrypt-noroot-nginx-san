@@ -1,6 +1,8 @@
-#CA = "https://acme-staging.api.letsencrypt.org"
-CA = "https://acme-v01.api.letsencrypt.org"
-TERMS = "https://letsencrypt.org/documents/LE-SA-v1.0.1-July-27-2015.pdf"
+#CA = "https://acme-staging-v02.api.letsencrypt.org/directory"
+CA = "https://acme-v02.api.letsencrypt.org/directory"
+TERMS = "https://letsencrypt.org/documents/LE-SA-v1.2-November-15-2017.pdf"
+
+RENEWAL_THRESHOLD = 15 # days
 
 MAIL = "admin@letsencrypt.example"
 CN = "server.letsencrypt.example"

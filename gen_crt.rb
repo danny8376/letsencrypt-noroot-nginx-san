@@ -1,15 +1,9 @@
 #!/usr/bin/env ruby
-require_relative 'lib/common'
-require 'url_safe_base64'
+# exit 0=> new cert, 1=> ruby err, 2=> no renewal, 5=> auth err, 10=> no key
+require 'acme-client'
 
 # load config
 load 'CONFIG.rb'
-
-
-
-SUPPORT_CHALLENGES = ["http-01"]
-
-
 
 ngx_options = `nginx -V 2>&1`
 NGINX_CONF = ngx_options.scan(/--conf-path=([^\s]+)/).last[0]
@@ -35,6 +29,7 @@ def get_nginx_confs(conf = NGINX_CONF)
   end
 end
 STATIC_DOMAIN_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9.-]+$/
+WILDCARD_DOMAIN_PATTERN = /^\*\.[a-zA-Z0-9][a-zA-Z0-9.-]+$/
 # list domains from nginx confs
 def get_domains
   domains = [CN]
@@ -68,8 +63,16 @@ def get_domains
   wildcard.flatten!
   wildcard.select!{|d| String === d}
   wildcard_check = []
-  wildcard.each{|d| wildcard_check.push d unless d[STATIC_DOMAIN_PATTERN]}
-  raise "Wildcard domains not precceed:#{wildcard_check.join " "}" unless wildcard_check.empty?
+  wildcard.each{|d|
+    if d[STATIC_DOMAIN_PATTERN]
+      # nothing
+    elsif d[WILDCARD_DOMAIN_PATTERN]
+      print "!!!NOTICE!!! wildcard SAN #{d}"
+    else
+      wildcard_check.push d
+    end
+  }
+  raise "Domains not precceed:#{wildcard_check.join " "}" unless wildcard_check.empty?
   static + wildcard
 end
 
@@ -82,29 +85,120 @@ end
 
 unless FileTest.exist? 'data/acc.key'
   print "Generate account keypair with: \n\nopenssl genrsa 4096 > data/acc.key\n\n"
-  exit
+  exit 10
 end
 unless FileTest.exist? 'data/server.key'
   print "Generate server keypair with: \n\nopenssl genrsa 2048 > data/server.key\n\n"
-  exit
+  exit 10
 end
 
+# check existing cert
+if FileTest.exist? 'data/output.pem' and (['force', '-f', '-force', '--force'] & ARGV).empty?
+  domains = []
+  $cert = OpenSSL::X509::Certificate.new File.read('data/output.pem')
+  $cert.subject.to_a.each do |name|
+    if name[0] == 'CN'
+      domains.push name[1]
+    end
+  end
+  $cert.extensions.select {|ext| ext.oid == 'subjectAltName'}.each do |ext|
+    domains.concat(ext.value.split(', ').map {|v| v[4..-1]})
+  end
+  # skip only if no domain change
+  if domains.uniq.sort == $domains.uniq.sort
+    due = $cert.not_after
+    now = Time.now
+    if due - now > RENEWAL_THRESHOLD * 24 * 60 * 60
+      print "Cert is still valid for more than #{RENEWAL_THRESHOLD} days, skip renewal, or use force to force renew.\n"
+      exit 2
+    end
+  end
+end
 
 # load keys (private keys are just used locally, which can be easily audited)
 $acc_priv = OpenSSL::PKey::RSA.new File.read('data/acc.key')
-$acc_pub = $acc_priv.public_key
-
-$acc_jwk = JSON::JWK.new $acc_pub # account public key as jwk (for request header)
-$acc_thumbprint = $acc_jwk.thumbprint # thumbprint for domain challenge
 
 $server_priv = OpenSSL::PKey::RSA.new File.read('data/server.key') # key for ssl server; used for sign csr
 $server_pub = $server_priv.public_key
 
-def jws(hash)
-  jws_raw(hash, $acc_jwk, $acc_priv)
+if FileTest.exist? 'data/kid.txt'
+  $kid = File.read('data/kid.txt')
+  $acme = Acme::Client.new(private_key: $acc_priv, directory: CA, kid: $kid)
+else
+  $acme = Acme::Client.new(private_key: $acc_priv, directory: CA)
+  acc = $acme.new_account(contact: "mailto:#{MAIL}", terms_of_service_agreed: true)
+  File.write('data/kid.txt', acc.kid)
 end
 
-print "Generating CSR\n"
+print "Start domain auth\n"
+
+$auth_server = UNIXServer.new(ACME_SOCK)
+$authes = {} # [auth, challenge]
+File.chmod(0777, ACME_SOCK)
+at_exit do
+  $auth_server.close if $auth_server and not $auth_server.closed?
+  File.unlink ACME_SOCK
+end
+
+# The part process accepting conns
+Thread.new do
+  while $auth_server and not $auth_server.closed?
+    sock = $auth_server.accept
+    req = sock.gets
+    method, path, ver = req.split(" ")
+    auth_pair = $authes[path]
+    if auth_pair
+      auth, challenge = *auth_pair
+      sock.print "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n#{challenge.file_content}"
+      print "Domain #{auth.domain} responsed\n"
+      sock.close
+    else
+      sock.print "HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n" rescue
+      sock.close
+    end
+  end
+rescue IOError
+  # ignore
+end
+
+$order = $acme.new_order(identifiers: $domains)
+
+$order.authorizations.each do |auth|
+  print "Auth for domain #{auth.domain}\n"
+  if auth.domain[0] == "*" # wildcard
+  else
+    http01 = auth.http
+    $authes["/#{http01.filename}"] = [auth, http01]
+    http01.request_validation
+    print "#{auth.domain} auth requested, expires: #{auth.expires}\n"
+  end
+end
+
+while $authes.any? {|k, v| v[1].status == 'pending'}
+  sleep 5
+  $authes.each do |path, auth_pair|
+    auth, challenge = *auth_pair
+    challenge.reload
+    if challenge.status != 'pending'
+      print "#{auth.domain} done, result: #{challenge.status}\n"
+      if challenge.status != 'valid'
+        print "Error: #{challenge.error}\n"
+      end
+    end
+  end
+end
+
+if $authes.any? {|k, v| v[1].status != 'valid'}
+  print "!!! Some domain auth failed !!!\n"
+  $authes.each do |path, auth_pair|
+    auth, challenge = *auth_pair
+    if challenge.status != 'valid'
+      print "Domain: #{auth.domain}\n"
+      print "Error: #{challenge.error}\n"
+    end
+  end
+  exit 5
+end
 
 # Gen CSR
 # As default, email of cert will be that of your account
@@ -126,170 +220,14 @@ csr.add_attribute(OpenSSL::X509::Attribute.new("msExtReq", ext_req))
 
 csr.sign($server_priv, OpenSSL::Digest::SHA256.new)
 
-
-print "Registering account\n"
-
-
-# Reg account
-res = ca_request('/acme/new-reg', :post, jws({
-  resource: "new-reg",
-  contact: ["mailto:#{MAIL}"],
-  agreement: TERMS
-}))
-
-case res.code
-when '201'
-  # normal
-  print "Registered!\n"
-when '409'
-  print "Alread registered, skipping\n"
-else
-  raise "Error registering\n"
+$order.finalize(csr: csr)
+while $order.status == 'processing'
+  sleep 1
+  $order.reload
 end
 
+File.write('data/output.pem', $order.certificate)
+File.open('data/history.txt', 'a') {|f| f.write "#{Time.now}:#{$order.certificate_url}\n"}
 
-print "Starting domain auth\n"
+print "Cert saved\n"
 
-# The unix socket server for nginx to pass, which used for auth domain
-$auth_server = UNIXServer.new(ACME_SOCK)
-File.chmod(0777, ACME_SOCK)
-
-at_exit do
-  $auth_server.close if $auth_server and not $auth_server.closed?
-  FileUtils.rm ACME_SOCK
-end
-
-# The whole auth process as follow
-# 1) request challenge from acme server
-# 2) accept incoming connections
-# 3) check the path is correct, then response with keyAuth
-# 4) polling acme server to check validation status
-
-# The part process accepting conns
-def wait_auth(auth)
-  loop do
-    sock = $auth_server.accept
-    req = sock.gets
-    if req.start_with?("GET /.well-known/acme-challenge/#{auth[/[^.]+/]} HTTP/")
-      sock.print "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n#{auth}"
-      sock.close
-      break
-    else
-      sock.print "HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n"
-      sock.close
-    end
-  end
-end
-
-# Polling status. We try 10 at most.
-def check_status(uri, depth = 0)
-  return :timeout if depth > 9 # too much times, maybe it's not accessed by acme server
-  res = ca_request(uri)
-  res = JSON.parse(res.body)
-  case res['status']
-  when "pending" # maybe too fast
-    sleep 1
-    check_status(uri, depth + 1)
-  when "valid"
-    return :valid, res
-  else
-    raise "Challenge failed"
-  end
-end
-
-# Auth domain OwO
-def auth_domain(uri, auth)
-  res = ca_request(uri) # This status shuold be pending most time
-  res = JSON.parse(res.body)
-  return res if res['status'] == "valid"
-
-  wait_auth(auth) # blocking here OwO
-  sleep 1 # wait acme server for processing
-
-  # when goes to here, it's authed
-  status, res = check_status(uri)
-  case status
-  when :timeout
-    raise "Challenge retry too much"
-  when :valid
-    return res
-  else # uh?
-  end
-end
-
-# Auth with all domains
-$domains.each do |domain|
-  print "Auth for domain #{domain}\n"
-
-  # checking for available challanges
-  res = ca_request('/acme/new-authz', :post, jws({
-    resource: "new-authz",
-    identifier: {
-      type: "dns",
-      value: domain,
-    }
-  }))
-
-  res = JSON.parse(res.body)
-  challenge = nil
-  supported = res['challenges'].any? do |c|
-    challenge = c
-    SUPPORT_CHALLENGES.include? c['type']
-  end
-  raise 'No supported challenge' unless supported
-
-  # CHALLENGE!
-  uri = challenge['uri']
-  uri[CA] = ''
-  res = ca_request(uri, :post, jws({
-    resource: "challenge",
-    type: challenge['type'],
-    keyAuthorization: "#{challenge['token']}.#{$acc_thumbprint}"
-  }))
-
-  res = JSON.parse(res.body)
-  uri = res['uri']
-  uri[CA] = ''
-  auth = res['keyAuthorization']
-  res = auth_domain(uri, auth)
-
-  # check auth status
-  uri[/\/\d+$/] = ''
-  res = ca_request(uri)
-
-  print "#{domain} authed, expires: #{res['expires']}\n"
-end
-
-
-print "Request for cert\n"
-
-
-res = ca_request("/acme/new-cert", :post, jws({
-  resource: "new-cert",
-  csr: UrlSafeBase64.encode64(csr.to_der)
-}))
-
-
-if res.code == "201"
-  uri = res['location']
-  if res.body.empty?
-    loop do
-      res = ca_request(uri)
-      case res.code
-      when "200"
-        cert_out(res, uri)
-        break
-      when "202"
-        time = res['retry-after']
-        time = (Time.parse(time) - Time.now).ceil unless time =~ /^\d+$/
-        print "Cert unavailable now, retry after #{time} sec later"
-        sleep time.to_i
-      else
-      end
-    end
-  else
-    cert_out(res, uri)
-  end
-else
-  raise "Cert failed"
-end
