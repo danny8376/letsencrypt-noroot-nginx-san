@@ -168,17 +168,29 @@ $order.authorizations.each do |auth|
   print "Auth for domain #{auth.domain}\n"
   dns01 = auth.dns
   http01 = auth.http
-  if http01
-    $authes["/#{http01.filename}"] = [auth, http01]
-    http01.request_validation
-    print "#{auth.domain} auth requested, expires: #{auth.expires}\n"
-  else
+  requested = false
+  if dns01 # try dns first
     $authes["#{auth.domain}"] = [auth, dns01, true]
-    unless DNS_UPDATE.call(auth.domain, dns01.record_name, dns01.record_type, dns01.record_content)
+    result = DNS_UPDATE.call(auth.domain, dns01.record_name, dns01.record_type, dns01.record_content)
+    if result.nil?
+      # nothing, continue
+    elsif result
+      requested = true
+    else
       print "Domain #{auth.domain} dns update failed\n"
       exit 5
     end
+  end
+  if not requested and http01
+    $authes["/#{http01.filename}"] = [auth, http01]
+    http01.request_validation
+    requested = true
+  end
+  if requested
     print "#{auth.domain} auth requested, expires: #{auth.expires}\n"
+  else
+    print "Domain #{auth.domain} no auth method available\n"
+    exit 5
   end
 end
 
