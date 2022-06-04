@@ -170,8 +170,9 @@ $order.authorizations.each do |auth|
   http01 = auth.http
   requested = false
   if dns01 # try dns first
-    $authes["#{auth.domain}"] = [auth, dns01, true]
-    result = DNS_UPDATE.call(auth.domain, dns01.record_name, dns01.record_type, dns01.record_content)
+    n = $authes.keys.collect{|k| k.start_with? auth.domain}.size + 1
+    $authes["#{auth.domain}-#{n}"] = [auth, dns01, true]
+    result = DNS_UPDATE.call(auth.domain, dns01.record_name, dns01.record_type, dns01.record_content, n)
     if result.nil?
       # nothing, continue
     elsif result

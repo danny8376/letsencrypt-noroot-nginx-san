@@ -23,9 +23,11 @@ WILDCARD_PROCESSING = Proc.new do |wildcard, static|
 end
 
 # for dns01 challengt => create dns record of #{type} for #{record}.#{domain} with value #{cont}
+# n is the counter of the same domain
+# (it'll be 1 unless duplicated, which usually only happen for authing both domain itself and wildcard)
 # return nil to indicate not to use dns01
 # return true/false to indicate wheather dns update success or not
 # since acme-cient uses faraday, you can use here to do api call
 # see https://lostisland.github.io/faraday/usage/
-DNS_UPDATE = Proc.new do |domain, record, type, cont|
+DNS_UPDATE = Proc.new do |domain, record, type, cont, n|
 end
