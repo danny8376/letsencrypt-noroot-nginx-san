@@ -48,16 +48,20 @@ def get_domains
       end
     end
   end
-  domains.uniq!
-  domains.reject! do |domain|
-    EXCLUDE_DOMAIN.any? do |exclude|
-      if exclude.start_with? "~"
-        domain.end_with? exclude[1..-1]
+  check_domain = Proc.new do |list, domain|
+    list.any? do |item|
+      if item.start_with? "~"
+        domain.end_with? item[1..-1]
       else
-        domain == exclude
+        domain == item
       end
     end
   end
+  domains.uniq!
+  if Object.const_defined? "INCLUDE_DOMAIN" and not INCLUDE_DOMAIN.empty?
+    domains.select! { |domain| check_domain.call INCLUDE_DOMAIN, domain }
+  end
+  domains.reject! { |domain| check_domain.call EXCLUDE_DOMAIN, domain }
   static, wildcard = [], []
   domains.each{|d| (d[STATIC_DOMAIN_PATTERN] ? static : wildcard).push d}
   WILDCARD_PROCESSING.call(wildcard, static) unless wildcard.empty?

@@ -9,6 +9,10 @@ CN = "server.letsencrypt.example"
 
 ACME_SOCK = "/tmp/acme-challenge.sock"
 
+# only process these domains, exclude is still valid with this
+# suffix with ~ =? include subdomains
+INCLUDE_DOMAIN = []
+
 # suffix with ~ =? include subdomains
 EXCLUDE_DOMAIN = ["~twbbs.org"]
 
