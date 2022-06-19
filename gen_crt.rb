@@ -175,11 +175,11 @@ $order.authorizations.each do |auth|
   requested = false
   if dns01 # try dns first
     n = $authes.keys.select{|k| k.start_with? auth.domain}.size + 1
-    $authes["#{auth.domain}-#{n}"] = [auth, dns01, true]
     result = DNS_UPDATE.call(auth.domain, dns01.record_name, dns01.record_type, dns01.record_content, n)
     if result.nil?
       # nothing, continue
     elsif result
+      $authes["#{auth.domain}-#{n}"] = [auth, dns01, true]
       requested = true
     else
       print "Domain #{auth.domain} dns update failed\n"
