@@ -167,6 +167,7 @@ rescue IOError
 end
 
 $order = $acme.new_order(identifiers: $domains)
+$wait_dns_update = false
 
 $order.authorizations.each do |auth|
   print "Auth for domain #{auth.domain}\n"
@@ -181,6 +182,7 @@ $order.authorizations.each do |auth|
     elsif result
       $authes["#{auth.domain}-#{n}"] = [auth, dns01, true]
       requested = true
+      $wait_dns_update = true
     else
       print "Domain #{auth.domain} dns update failed\n"
       exit 5
@@ -197,6 +199,11 @@ $order.authorizations.each do |auth|
     print "Domain #{auth.domain} no auth method available\n"
     exit 5
   end
+end
+
+if $wait_dns_update
+  print "Waiting for DNS updates\n"
+  sleep DNS_UPDATE_WAIT_TIME if $wait_dns_update
 end
 
 $authes.each {|k, v| v[1].request_validation if v[2]}

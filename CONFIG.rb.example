@@ -26,6 +26,8 @@ CUSTOM_DOMAIN = []
 WILDCARD_PROCESSING = Proc.new do |wildcard, static|
 end
 
+DNS_UPDATE_WAIT_TIME = 60
+
 # for dns01 challengt => create dns record of #{type} for #{record}.#{domain} with value #{cont}
 # n is the counter of the same domain
 # (it'll be 1 unless duplicated, which usually only happen for authing both domain itself and wildcard)
