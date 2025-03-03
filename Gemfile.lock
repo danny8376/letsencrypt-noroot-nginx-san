@@ -14,7 +14,7 @@ GEM
     logger (1.6.0)
     net-http (0.4.1)
       uri
-    uri (0.13.0)
+    uri (0.13.2)
 
 PLATFORMS
   ruby
