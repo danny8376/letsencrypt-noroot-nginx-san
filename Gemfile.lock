@@ -4,6 +4,7 @@ GEM
     acme-client (2.0.18)
       faraday (>= 1.0, < 3.0.0)
       faraday-retry (>= 1.0, < 3.0.0)
+    base64 (0.3.0)
     faraday (2.10.0)
       faraday-net_http (>= 2.0, < 3.2)
       logger
@@ -21,6 +22,7 @@ PLATFORMS
 
 DEPENDENCIES
   acme-client
+  base64
 
 BUNDLED WITH
    2.3.15
